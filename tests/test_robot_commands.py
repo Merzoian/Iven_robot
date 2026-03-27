@@ -195,6 +195,24 @@ class RobotCommandsTests(unittest.TestCase):
 
         self.assertFalse(handled)
 
+    def test_local_voice_command_read_this_triggers_document_ocr(self):
+        calls = []
+        self.runtime.read_visible_text = lambda mode="auto": calls.append(mode) or {"ok": True, "mode": mode}
+
+        handled = robot_commands.execute_local_voice_command("can you read this")
+
+        self.assertFalse(handled)
+        self.assertEqual(calls, ["document"])
+
+    def test_local_voice_command_read_this_equation_triggers_document_ocr(self):
+        calls = []
+        self.runtime.read_visible_text = lambda mode="auto": calls.append(mode) or {"ok": True, "mode": mode}
+
+        handled = robot_commands.execute_local_voice_command("read this equation")
+
+        self.assertFalse(handled)
+        self.assertEqual(calls, ["document"])
+
     def test_read_visible_text_tool_uses_runtime_ocr_handler(self):
         self.runtime.read_visible_text = lambda mode="auto": {
             "ok": True,

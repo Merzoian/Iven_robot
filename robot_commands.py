@@ -218,6 +218,14 @@ def execute_local_voice_command(text):
     if re.search(r"\b(what can you do|what are your features|tell me your features|introduce yourself)\b", t):
         execute_robot_function("describe_features", {})
         return False
+    if (
+        re.search(r"\b(read|scan)\s+(this|that)\b", t)
+        or re.search(r"\b(read|solve)\s+(this|that)\s+(equation|math|problem|text)\b", t)
+        or re.search(r"\bwhat\s+does\s+(this|that)\s+say\b", t)
+        or re.search(r"\bcan\s+you\s+read\s+(this|that)\b", t)
+    ):
+        execute_robot_function("read_visible_text", {"mode": "document"})
+        return False
 
     if not _ctx.command_enabled:
         return False
