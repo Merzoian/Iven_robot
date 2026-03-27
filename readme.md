@@ -27,7 +27,12 @@
       - Ivan introduces himself naturally when asked.
       - If someone asks what he can do, he offers a short feature tour first.
       - If someone asks about a specific feature, he explains it briefly and asks whether they want the best way to use it.
+      - Ivan knows Valentina created this project and brought him to life for her Advanced Embedded Systems class at BYU-Idaho.
       - You can change his TTS voice with `IVAN_VOICE_NAME` if you want a different tone.
+  7. Live vision and OCR phrases
+      - Say “what do you see” or “what are you seeing” for a brief scene description.
+      - Say “read this”, “can you read this”, or “what does this say” to trigger careful text reading.
+      - Say “read this equation” or “solve this equation” to trigger OCR on visible math.
 
 Backup command:
 - Run `./backup_repo.sh` to save all tracked and new files in this repo, create a commit if needed, and push to GitHub.

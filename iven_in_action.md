@@ -111,6 +111,7 @@ Examples it recognizes:
 
 - its name is Ivan,
 - it is a robotic head,
+- Valentina created the project and brought Ivan to life for her Advanced Embedded Systems class at BYU-Idaho,
 - it is in a live conversation,
 - to introduce itself naturally when asked,
 - to offer a short feature tour when someone asks what it can do,
@@ -163,6 +164,16 @@ It recognizes phrases like:
 - "turn head left/right"
 - "tilt left/right"
 - "center", "home", "neutral"
+- "read this"
+- "can you read this"
+- "what does this say"
+- "read this equation"
+- "solve this equation"
+
+For live scene description, the prompt also explicitly guides Ivan to answer:
+
+- "what do you see"
+- "what are you seeing"
 
 This is important because it means movement can happen directly from transcription text.
 
