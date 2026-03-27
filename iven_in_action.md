@@ -13,7 +13,8 @@ The runtime entry point is [main4_robot.py](/home/redleader/gemini_robot/main4_r
 5. Connect to Gemini live with audio, image input, and robot tool declarations.
 6. Send live mic and camera data to the model.
 7. Receive transcription, speech audio, and tool calls from the model.
-8. Apply movement, OCR, tracking, lip sync, and memory updates in real time.
+8. Apply movement, OCR, tracking, lip sync, memory updates, and command suppression logic in real time.
+9. Trigger a delayed command-mode follow-up prompt when Ivan is idle after local commands.
 
 ## Project Structure
 
@@ -47,6 +48,8 @@ Ivan has three main control modes.
 - Default conversational mode for direct movement requests.
 - Manual head and gaze actions are allowed.
 - Tracking is not active.
+- Local movement and mode-switch commands can temporarily suppress model speech and tool reactions.
+- After a short idle period, Ivan can ask what the user wants next.
 
 Typical phrases:
 
@@ -83,6 +86,7 @@ Typical phrases:
 - The head stays slightly lowered.
 - Blinking and subtle eye motion continue.
 - Yes and no are expressed with `gesture_head`.
+- Local spoken feedback like `yes`, `correct`, `no`, and `wrong` can trigger yes/no gestures.
 
 Typical phrases:
 
@@ -100,8 +104,12 @@ The system instruction in [robot_prompt.py](/home/redleader/gemini_robot/robot_p
 - he should use camera frames continuously
 - he should use OCR when the user is showing text or math
 - he should only move when explicitly asked
+- in command mode, `look_direction` is only for left, right, up, down, or center
+- in command mode, `tilt_head` is only for tilt left, right, or center
+- after command-mode movement, he should stay quiet and wait for the next command
 - he should only enable tracking when explicitly requested
 - he should stay nonverbal in `intro` mode
+- after enough silence, he may ask a simple follow-up such as `What do you want me to do next?`
 - Valentina created the project and brought him to life for her Advanced Embedded Systems class at BYU-Idaho
 
 ## Tool API
@@ -112,6 +120,7 @@ Gemini receives these robot tools from [robot_tools.py](/home/redleader/gemini_r
 - `set_tracking`
 - `look_direction`
 - `move_head`
+- `tilt_head`
 - `center_servos`
 - `describe_features`
 - `feature_help`
@@ -140,9 +149,19 @@ Recognized movement and mode phrases include:
 - `turn head right`
 - `tilt left`
 - `tilt right`
+- `tilt left side`
+- `tilt right side`
+- `that is correct`
+- `that is wrong`
 - `center`
 - `home`
 - `neutral`
+
+Local command handling also:
+
+- flushes pending model audio after local movement and mode-switch commands
+- suppresses model movement tool calls briefly after local movement commands
+- schedules a delayed command-mode follow-up prompt
 
 Recognized OCR phrases include:
 
@@ -167,7 +186,7 @@ Main behavior:
 - applies image enhancement for contrast and clarity
 - performs face and person detection
 - tracks recent targets with smoothing
-- overlays recent speech as a HUD
+- overlays recent speech as a HUD with separate `Heard` and `Said` captions
 - keeps the latest frame and JPEG ready for OCR and Gemini input
 
 Preview overlays and priorities:
@@ -219,7 +238,9 @@ It:
 - plays model audio back through the speaker
 - drives jaw motion from speech loudness
 - suppresses mic upload while Ivan is speaking to reduce feedback
+- keeps mic upload paused briefly after speech to reduce self-capture
 - pauses camera uploads while speech is actively playing
+- changes camera upload speed by mode so tracking stays more responsive than intro mode
 
 ## Memory System
 
@@ -240,10 +261,12 @@ Memory is saved back to [ivan_session_memory.json](/home/redleader/gemini_robot/
 
 For each response it may:
 
-- store the latest transcription for the camera HUD
+- store separate latest user and model transcriptions for the camera HUD
+- update last user activity time
 - update memory from the user’s words
 - run the local spoken command parser
 - queue model audio for playback
+- suppress model audio or command tools during local quiet-mode windows
 - execute tool calls and send tool responses back to Gemini
 
 ## Motion System

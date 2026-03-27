@@ -81,6 +81,8 @@ class RobotRuntimeConfigTests(unittest.TestCase):
             OCR_DOCUMENT_PSM=6,
             OCR_TIMEOUT_S=5.0,
             OCR_DOCUMENT_CROP_RATIO=0.7,
+            SPEECH_SELF_CAPTURE_GUARD_S=1.8,
+            FOLLOW_UP_WAIT_S=5.0,
         )
 
     def test_load_robot_config_returns_defaults_when_file_missing(self):

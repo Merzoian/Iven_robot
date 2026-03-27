@@ -329,25 +329,34 @@ class CameraManager:
                 state_text += f" ({_ctx.tracked_target_kind})"
             _ctx.cv2.putText(frame, state_text, (12, 24), _ctx.cv2.FONT_HERSHEY_SIMPLEX, 0.58, (0, 0, 0), 4, _ctx.cv2.LINE_AA)
             _ctx.cv2.putText(frame, state_text, (12, 24), _ctx.cv2.FONT_HERSHEY_SIMPLEX, 0.58, (120, 220, 255), 1, _ctx.cv2.LINE_AA)
-        if _ctx.latest_transcription and (now - _ctx.latest_transcription_at) < 8.0:
-            text = _ctx.latest_transcription
-            max_chars = 64
-            lines = []
-            while len(text) > max_chars:
-                split_at = text.rfind(" ", 0, max_chars)
-                if split_at <= 0:
-                    split_at = max_chars
-                lines.append(text[:split_at])
-                text = text[split_at:].strip()
-            if text:
-                lines.append(text)
-            lines = lines[:4]
-            y0 = frame.shape[0] - 18 - (len(lines) - 1) * 22
-            for idx, line in enumerate(lines):
+        caption_blocks = []
+        if getattr(_ctx, "latest_user_transcription", "") and (now - getattr(_ctx, "latest_user_transcription_at", 0.0)) < 8.0:
+            caption_blocks.append(("Heard", _ctx.latest_user_transcription, (90, 255, 120)))
+        if getattr(_ctx, "latest_model_transcription", "") and (now - getattr(_ctx, "latest_model_transcription_at", 0.0)) < 8.0:
+            caption_blocks.append(("Said", _ctx.latest_model_transcription, (120, 220, 255)))
+
+        if caption_blocks:
+            max_chars = 60
+            rendered_lines = []
+            for label, text, color in caption_blocks:
+                remaining = text
+                label_used = False
+                while remaining and len(rendered_lines) < 5:
+                    split_at = remaining.rfind(" ", 0, max_chars)
+                    if len(remaining) <= max_chars:
+                        split_at = len(remaining)
+                    elif split_at <= 0:
+                        split_at = max_chars
+                    chunk = remaining[:split_at].strip()
+                    remaining = remaining[split_at:].strip()
+                    prefix = f"{label}: " if not label_used else ""
+                    label_used = True
+                    rendered_lines.append((f"{prefix}{chunk}", color))
+            y0 = frame.shape[0] - 18 - (len(rendered_lines) - 1) * 22
+            for idx, (line, color) in enumerate(rendered_lines):
                 y = y0 + idx * 22
-                prefix = "Ivan heard: " if idx == 0 else ""
-                _ctx.cv2.putText(frame, f"{prefix}{line}", (12, y), _ctx.cv2.FONT_HERSHEY_SIMPLEX, 0.58, (0, 0, 0), 4, _ctx.cv2.LINE_AA)
-                _ctx.cv2.putText(frame, f"{prefix}{line}", (12, y), _ctx.cv2.FONT_HERSHEY_SIMPLEX, 0.58, (90, 255, 120), 1, _ctx.cv2.LINE_AA)
+                _ctx.cv2.putText(frame, line, (12, y), _ctx.cv2.FONT_HERSHEY_SIMPLEX, 0.58, (0, 0, 0), 4, _ctx.cv2.LINE_AA)
+                _ctx.cv2.putText(frame, line, (12, y), _ctx.cv2.FONT_HERSHEY_SIMPLEX, 0.58, color, 1, _ctx.cv2.LINE_AA)
 
     async def capture_loop(self):
         if not _ctx.CAMERA_AVAILABLE:

@@ -24,7 +24,7 @@ def get_tool_declarations():
         },
         {
             "name": "look_direction",
-            "description": "Move the robot gaze to a direction.",
+            "description": "Look left, right, up, down, or center by using yaw and pitch only. Do not use this tool for head tilt.",
             "parameters": {
                 "type": "OBJECT",
                 "properties": {
@@ -51,6 +51,18 @@ def get_tool_declarations():
                     "tilt": {"type": "INTEGER", "description": "CH9 range 1320-1680"},
                     "duration_s": {"type": "NUMBER", "description": "Hold time in seconds 0.2-4.0"},
                 },
+            },
+        },
+        {
+            "name": "tilt_head",
+            "description": "Tilt the head left, right, or back to center without changing look-left or look-right yaw.",
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {
+                    "direction": {"type": "STRING", "enum": ["left", "right", "center"]},
+                    "duration_s": {"type": "NUMBER", "description": "Hold time in seconds 0.2-4.0"},
+                },
+                "required": ["direction"],
             },
         },
         {

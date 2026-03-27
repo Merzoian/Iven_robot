@@ -50,7 +50,7 @@ os.environ.setdefault("JACK_NO_START_SERVER", "1")
 MIC_INDEX = 1
 SPEAKER_INDEX = 2
 SAMPLE_RATE = 48000
-CHUNK = 2048
+CHUNK = 512
 
 JAW_CLOSED = 1500
 JAW_OPEN_MAX = 1750
@@ -156,6 +156,8 @@ OCR_PSM = 6
 OCR_DOCUMENT_PSM = 6
 OCR_TIMEOUT_S = 5.0
 OCR_DOCUMENT_CROP_RATIO = 0.7
+SPEECH_SELF_CAPTURE_GUARD_S = 1.8
+FOLLOW_UP_WAIT_S = 5.0
 
 DEFAULT_CONFIG = RobotConfig(
     LOG_NAME="ivan.robot",
@@ -231,6 +233,8 @@ DEFAULT_CONFIG = RobotConfig(
     OCR_DOCUMENT_PSM=OCR_DOCUMENT_PSM,
     OCR_TIMEOUT_S=OCR_TIMEOUT_S,
     OCR_DOCUMENT_CROP_RATIO=OCR_DOCUMENT_CROP_RATIO,
+    SPEECH_SELF_CAPTURE_GUARD_S=SPEECH_SELF_CAPTURE_GUARD_S,
+    FOLLOW_UP_WAIT_S=FOLLOW_UP_WAIT_S,
 )
 CONFIG = load_robot_config(CONFIG_PATH, DEFAULT_CONFIG)
 
@@ -301,7 +305,12 @@ def apply_memory_from_text(text):
 
 
 def build_system_instruction():
-    return compose_system_instruction(runtime.session_memory, runtime.memory_lock, runtime.control_mode)
+    return compose_system_instruction(
+        runtime.session_memory,
+        runtime.memory_lock,
+        runtime.control_mode,
+        runtime.FOLLOW_UP_WAIT_S,
+    )
 
 
 async def main():
@@ -312,7 +321,7 @@ async def main():
 
     api_key = os.environ.get("GOOGLE_API_KEY")
     client = genai.Client(api_key=api_key, http_options={'api_version': 'v1alpha'})
-    voice_name = os.environ.get("IVAN_VOICE_NAME", "Achird").strip() or "Achird"
+    voice_name = os.environ.get("IVAN_VOICE_NAME", "Kore").strip() or "Kore"
 
     p = pyaudio.PyAudio()
     mic, spk = open_audio_streams(p)
@@ -327,6 +336,7 @@ async def main():
         while not runtime.shutdown_requested:
             mic_task = None
             cam_send_task = None
+            idle_prompt_task = None
             try:
                 config = {
                     "response_modalities": ["AUDIO"],
@@ -346,6 +356,7 @@ async def main():
 
                     mic_task = asyncio.create_task(send_mic(session, mic))
                     cam_send_task = asyncio.create_task(send_camera(session, camera_mgr))
+                    idle_prompt_task = asyncio.create_task(command_idle_prompt_worker(session))
 
                     while not runtime.shutdown_requested:
                         got_message = False
@@ -376,7 +387,7 @@ async def main():
                 center_all_servos_now()
                 await asyncio.sleep(1.0)
             finally:
-                for task in (mic_task, cam_send_task):
+                for task in (mic_task, cam_send_task, idle_prompt_task):
                     if task:
                         task.cancel()
                         try:
@@ -410,6 +421,31 @@ async def main():
         save_session_memory()
         center_all_servos_now()
         log_event(runtime.logger, "info", "runtime_shutdown")
+
+
+async def command_idle_prompt_worker(session):
+    while not runtime.shutdown_requested:
+        try:
+            now = time.time()
+            due_at = getattr(runtime, "command_idle_prompt_due_at", 0.0)
+            if (
+                due_at
+                and now >= due_at
+                and runtime.control_mode == "command"
+                and runtime.command_enabled
+                and not runtime.tracking_enabled
+                and not runtime.is_ivan_talking
+                and runtime.audio_queue.empty()
+            ):
+                runtime.command_idle_prompt_due_at = 0.0
+                runtime.model_audio_suppressed_until = 0.0
+                runtime.model_action_suppressed_until = 0.0
+                await session.send_realtime_input(text="What do you want me to do next?")
+            await asyncio.sleep(0.25)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            await asyncio.sleep(0.4)
 
 
 def run():

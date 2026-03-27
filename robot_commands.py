@@ -43,6 +43,42 @@ def initialize(context):
     _ctx = context
 
 
+def _flush_pending_audio():
+    while True:
+        try:
+            _ctx.audio_queue.get_nowait()
+            _ctx.audio_queue.task_done()
+        except Exception:
+            break
+
+
+def _arm_local_command_quiet_mode(follow_up_delay_s=10.0, suppress_reaction_s=3.0):
+    now = time.time()
+    _ctx.last_user_activity_at = now
+    _ctx.model_audio_suppressed_until = now + suppress_reaction_s
+    _ctx.model_action_suppressed_until = now + suppress_reaction_s
+    _ctx.command_idle_prompt_due_at = (now + follow_up_delay_s) if follow_up_delay_s > 0 else 0.0
+    _flush_pending_audio()
+    _ctx.is_ivan_talking = False
+    if _ctx.maestro and hasattr(_ctx.maestro, "set_target"):
+        _ctx.maestro.set_target(_ctx.CH_JAW, _ctx.JAW_CLOSED)
+
+
+def _intro_feedback_gesture(text):
+    t = str(text or "").lower().strip()
+    if not t or getattr(_ctx, "control_mode", "command") != "intro":
+        return False
+    if re.search(r"\b(yes|yeah|yep|correct|right|exactly|that'?s right|true)\b", t):
+        _arm_local_command_quiet_mode(follow_up_delay_s=0.0, suppress_reaction_s=2.4)
+        _ctx.perform_head_gesture("yes")
+        return True
+    if re.search(r"\b(no|nope|wrong|incorrect|not right|that'?s wrong|false)\b", t):
+        _arm_local_command_quiet_mode(follow_up_delay_s=0.0, suppress_reaction_s=2.4)
+        _ctx.perform_head_gesture("no")
+        return True
+    return False
+
+
 def execute_robot_function(name, args):
     args = args or {}
 
@@ -162,6 +198,40 @@ def execute_robot_function(name, args):
             "duration_s": duration_s,
         }
 
+    if name == "tilt_head":
+        if not _ctx.command_enabled:
+            return {"ok": False, "error": "Movement command ignored in tracking mode"}
+        direction = str(args.get("direction", "center")).lower().strip()
+        duration_arg = args.get("duration_s")
+        duration_s = float(3.0 if duration_arg is None else duration_arg)
+        duration_s = float(_ctx.clamp(duration_s, 0.2, 4.0))
+        tilt_min, tilt_max, tilt_raw_min, tilt_raw_max = _ctx._get_sorted_limits(_ctx.CH_TILT, _ctx.HEAD_TILT_MIN, _ctx.HEAD_TILT_MAX)
+        tilt_left = max(tilt_raw_min, tilt_raw_max)
+        tilt_right = min(tilt_raw_min, tilt_raw_max)
+        if direction == "left":
+            tilt = tilt_left
+        elif direction == "right":
+            tilt = tilt_right
+        elif direction == "center":
+            tilt = _ctx.HEAD_NEUTRAL["tilt"]
+        else:
+            return {"ok": False, "error": f"Unknown tilt direction: {direction}"}
+
+        _ctx.head_override_pose["tilt"] = int(_ctx.clamp(tilt, tilt_min, tilt_max))
+        _ctx.head_override_pose["yaw"] = int(_ctx.clamp(_ctx.head_target_pose["yaw"], _ctx.HEAD_YAW_MIN, _ctx.HEAD_YAW_MAX))
+        _ctx.head_override_pose["pitch"] = int(_ctx.clamp(_ctx.head_target_pose["pitch"], _ctx.HEAD_PITCH_MIN, _ctx.HEAD_PITCH_MAX))
+        _ctx.request_head_pose(tilt=_ctx.head_override_pose["tilt"])
+        _ctx.head_override_until = time.time() + duration_s
+        _ctx.tracking_resume_at = _ctx.head_override_until + 0.5
+        if _ctx.maestro:
+            _ctx.set_head_pose(
+                _ctx.maestro,
+                yaw=_ctx.head_override_pose["yaw"],
+                pitch=_ctx.head_override_pose["pitch"],
+                tilt=_ctx.head_override_pose["tilt"],
+            )
+        return {"ok": True, "direction": direction, "tilt": _ctx.head_override_pose["tilt"], "duration_s": duration_s}
+
     if name == "center_servos":
         if not _ctx.command_enabled:
             return {"ok": False, "error": "Movement command ignored in tracking mode"}
@@ -208,12 +278,17 @@ def execute_local_voice_command(text):
 
     if re.search(r"\b(tracking mode|enable tracking|start tracking|turn on tracking)\b", t) or "follow me" in t:
         execute_robot_function("set_mode", {"mode": "tracking"})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\b(command mode|disable tracking|stop tracking|turn off tracking)\b", t) or "stop following" in t:
         execute_robot_function("set_mode", {"mode": "command"})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\bintro mode\b", t) or re.search(r"\b(enable|start|switch to)\s+intro\b", t):
         execute_robot_function("set_mode", {"mode": "intro"})
+        _arm_local_command_quiet_mode(follow_up_delay_s=0.0, suppress_reaction_s=2.4)
+        return True
+    if _intro_feedback_gesture(t):
         return True
     if re.search(r"\b(what can you do|what are your features|tell me your features|introduce yourself)\b", t):
         execute_robot_function("describe_features", {})
@@ -232,52 +307,62 @@ def execute_local_voice_command(text):
 
     if re.search(r"\blook\s+left\b", t):
         execute_robot_function("look_direction", {"direction": "left", "strength": 100})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\blook\s+right\b", t):
         execute_robot_function("look_direction", {"direction": "right", "strength": 100})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\blook\s+up\b", t):
         execute_robot_function("look_direction", {"direction": "up", "strength": 85})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\blook\s+down\b", t):
         execute_robot_function("look_direction", {"direction": "down", "strength": 85})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\blook\s+(center|straight)\b", t):
         execute_robot_function("look_direction", {"direction": "center", "strength": 80})
+        _arm_local_command_quiet_mode()
         return True
 
     yaw_min, yaw_max, _, _ = _ctx._get_sorted_limits(_ctx.CH_YAW, _ctx.HEAD_YAW_MIN, _ctx.HEAD_YAW_MAX)
     pitch_min, pitch_max, _, _ = _ctx._get_sorted_limits(_ctx.CH_FACE_PITCH, _ctx.HEAD_PITCH_MIN, _ctx.HEAD_PITCH_MAX)
-    tilt_min, tilt_max, tilt_raw_min, tilt_raw_max = _ctx._get_sorted_limits(_ctx.CH_TILT, _ctx.HEAD_TILT_MIN, _ctx.HEAD_TILT_MAX)
-    tilt_left_pulse = max(tilt_raw_min, tilt_raw_max)
-    tilt_right_pulse = min(tilt_raw_min, tilt_raw_max)
-
     if re.search(r"\btilt\s+left\s+side\b", t):
-        execute_robot_function("move_head", {"tilt": 1650, "duration_s": 3.0})
+        execute_robot_function("tilt_head", {"direction": "left", "duration_s": 3.0})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\btilt\s+right\s+side\b", t):
-        execute_robot_function("move_head", {"tilt": 1360, "duration_s": 3.0})
+        execute_robot_function("tilt_head", {"direction": "right", "duration_s": 3.0})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\b(tilt|lean|head tilt)\s+left\b", t):
-        execute_robot_function("move_head", {"tilt": tilt_left_pulse, "duration_s": 3.0})
+        execute_robot_function("tilt_head", {"direction": "left", "duration_s": 3.0})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\b(tilt|lean|head tilt)\s+right\b", t):
-        execute_robot_function("move_head", {"tilt": tilt_right_pulse, "duration_s": 3.0})
+        execute_robot_function("tilt_head", {"direction": "right", "duration_s": 3.0})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\b(tilt|head)\s+up\b", t):
         execute_robot_function("move_head", {"pitch": pitch_max, "duration_s": 3.0})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\b(tilt|head)\s+down\b", t):
         execute_robot_function("move_head", {"pitch": pitch_min, "duration_s": 3.0})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\b(turn|move)\s+head\s+left\b", t) or re.search(r"\bturn\s+left\b", t):
         execute_robot_function("move_head", {"yaw": yaw_max, "duration_s": 1.8})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\b(turn|move)\s+head\s+right\b", t) or re.search(r"\bturn\s+right\b", t):
         execute_robot_function("move_head", {"yaw": yaw_min, "duration_s": 1.8})
+        _arm_local_command_quiet_mode()
         return True
     if re.search(r"\b(center|home|neutral)\b", t):
         execute_robot_function("center_servos", {})
+        _arm_local_command_quiet_mode()
         return True
 
     return False

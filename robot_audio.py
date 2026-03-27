@@ -113,6 +113,7 @@ async def playback_worker(spk):
         raw_16k_bytes = await _ctx.audio_queue.get()
         _ctx.is_ivan_talking = True
         _ctx.last_tts_audio_ts = time.time()
+        _ctx.mic_resume_at = _ctx.last_tts_audio_ts + _ctx.SPEECH_SELF_CAPTURE_GUARD_S
         try:
             audio_array = np.frombuffer(raw_16k_bytes, dtype=np.int16)
 
@@ -141,6 +142,7 @@ async def playback_worker(spk):
             if _ctx.audio_queue.empty():
                 if _ctx.maestro:
                     _ctx.maestro.set_target(_ctx.CH_JAW, _ctx.JAW_CLOSED)
+                _ctx.mic_resume_at = max(_ctx.mic_resume_at, time.time() + _ctx.SPEECH_SELF_CAPTURE_GUARD_S)
                 _ctx.is_ivan_talking = False
 
 
@@ -151,12 +153,15 @@ async def send_mic(session, mic):
                 _ctx.is_ivan_talking = False
                 if _ctx.maestro:
                     _ctx.maestro.set_target(_ctx.CH_JAW, _ctx.JAW_CLOSED)
-            if not _ctx.is_ivan_talking:
+            guard_active = (time.time() < getattr(_ctx, "mic_resume_at", 0.0)) or (not _ctx.audio_queue.empty())
+            if not _ctx.is_ivan_talking and not guard_active:
                 raw_data = mic.read(_ctx.CHUNK, exception_on_overflow=False)
                 audio_array = np.frombuffer(raw_data, dtype=np.int16)
                 await session.send_realtime_input(
                     audio={"mime_type": "audio/pcm;rate=16000", "data": audio_array[::3].tobytes()}
                 )
+            else:
+                await asyncio.sleep(0.02)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -174,11 +179,18 @@ async def send_camera(session, camera_mgr):
             if _ctx.is_ivan_talking or not _ctx.audio_queue.empty():
                 await asyncio.sleep(0.12)
                 continue
+            mode = getattr(_ctx, "control_mode", "command")
+            if mode == "tracking":
+                frame_interval = min(_ctx.MODEL_FRAME_INTERVAL_S, 0.35)
+            elif mode == "intro":
+                frame_interval = max(_ctx.MODEL_FRAME_INTERVAL_S, 1.10)
+            else:
+                frame_interval = max(_ctx.MODEL_FRAME_INTERVAL_S, 0.90)
             if camera_mgr.latest_jpeg:
                 await session.send_realtime_input(
                     video={"mime_type": "image/jpeg", "data": camera_mgr.latest_jpeg}
                 )
-                await asyncio.sleep(_ctx.MODEL_FRAME_INTERVAL_S)
+                await asyncio.sleep(frame_interval)
             else:
                 await asyncio.sleep(0.04)
         except asyncio.CancelledError:

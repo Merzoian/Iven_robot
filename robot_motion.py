@@ -486,6 +486,10 @@ def get_intro_head_pose():
     }
 
 
+def _lerp_int(current, target, alpha):
+    return int(round(current + ((target - current) * alpha)))
+
+
 def _apply_override_pose(yaw, pitch, tilt, duration_s):
     yaw_min, yaw_max, _, _ = _get_sorted_limits(_ctx.CH_YAW, _ctx.HEAD_YAW_MIN, _ctx.HEAD_YAW_MAX)
     pitch_min, pitch_max, _, _ = _get_sorted_limits(_ctx.CH_FACE_PITCH, _ctx.HEAD_PITCH_MIN, _ctx.HEAD_PITCH_MAX)
@@ -520,22 +524,22 @@ def perform_head_gesture(gesture):
     tilt = rest_pose["tilt"]
 
     if gesture == "yes":
-        down_pitch = int(clamp(rest_pose["pitch"] - 70, pitch_min, pitch_max))
-        up_pitch = int(clamp(rest_pose["pitch"] + 55, pitch_min, pitch_max))
+        down_pitch = int(clamp(rest_pose["pitch"] - 122, pitch_min, pitch_max))
+        up_pitch = int(clamp(rest_pose["pitch"] + 72, pitch_min, pitch_max))
         sequence = [
+            (rest_pose["yaw"], down_pitch, tilt, 0.22),
+            (rest_pose["yaw"], up_pitch, tilt, 0.20),
             (rest_pose["yaw"], down_pitch, tilt, 0.20),
             (rest_pose["yaw"], up_pitch, tilt, 0.18),
-            (rest_pose["yaw"], down_pitch, tilt, 0.18),
-            (rest_pose["yaw"], rest_pose["pitch"], tilt, 0.20),
+            (rest_pose["yaw"], rest_pose["pitch"], tilt, 0.24),
         ]
     else:
-        left_yaw = int(clamp(rest_pose["yaw"] + 85, yaw_min, yaw_max))
-        right_yaw = int(clamp(rest_pose["yaw"] - 85, yaw_min, yaw_max))
+        left_yaw = int(clamp(rest_pose["yaw"] + 132, yaw_min, yaw_max))
+        right_yaw = int(clamp(rest_pose["yaw"] - 132, yaw_min, yaw_max))
         sequence = [
-            (left_yaw, rest_pose["pitch"], tilt, 0.18),
-            (right_yaw, rest_pose["pitch"], tilt, 0.18),
-            (left_yaw, rest_pose["pitch"], tilt, 0.16),
-            (rest_pose["yaw"], rest_pose["pitch"], tilt, 0.20),
+            (left_yaw, rest_pose["pitch"], tilt, 0.24),
+            (right_yaw, rest_pose["pitch"], tilt, 0.24),
+            (rest_pose["yaw"], rest_pose["pitch"], tilt, 0.26),
         ]
 
     for yaw, pitch, tilt_val, hold_s in sequence:
@@ -633,23 +637,28 @@ def eye_movement_worker(maestro):
     set_eyelids(maestro, closed=False)
     set_gaze(maestro, 0, 0)
 
-    next_blink_at = time.time() + random.uniform(2.0, 4.5)
+    next_blink_at = time.time() + random.uniform(1.8, 3.6)
     current_lr = 0
     current_ud = 0
 
     while not _ctx.shutdown_requested:
         now = time.time()
         in_intro_mode = getattr(_ctx, "control_mode", "command") == "intro"
-        blink_base = (2.2, 4.2) if in_intro_mode else ((3.0, 6.0) if _ctx.is_ivan_talking else (2.0, 4.5))
+        blink_base = (1.8, 3.2) if in_intro_mode else ((2.4, 4.0) if _ctx.is_ivan_talking else (1.8, 3.5))
 
         if now >= next_blink_at:
             set_eyelids(maestro, closed=True)
-            time.sleep(random.uniform(0.09, 0.15))
+            time.sleep(random.uniform(0.08, 0.14))
             set_eyelids(maestro, closed=False)
-            if random.random() < 0.06 and not _ctx.is_ivan_talking:
-                time.sleep(random.uniform(0.08, 0.16))
+            if random.random() < 0.14 and not _ctx.is_ivan_talking:
+                time.sleep(random.uniform(0.06, 0.14))
                 set_eyelids(maestro, closed=True)
-                time.sleep(random.uniform(0.05, 0.10))
+                time.sleep(random.uniform(0.04, 0.09))
+                set_eyelids(maestro, closed=False)
+            elif random.random() < 0.12:
+                time.sleep(random.uniform(0.02, 0.05))
+                set_eyelids(maestro, closed=True)
+                time.sleep(random.uniform(0.02, 0.04))
                 set_eyelids(maestro, closed=False)
             next_blink_at = now + random.uniform(*blink_base)
 
@@ -664,55 +673,62 @@ def eye_movement_worker(maestro):
             continue
 
         if _ctx.is_ivan_talking:
-            if random.random() < 0.22:
-                target_lr = random.randint(-28, 28)
-                target_ud = random.randint(-20, 20)
-                current_lr = int(0.82 * current_lr + 0.18 * target_lr)
-                current_ud = int(0.82 * current_ud + 0.18 * target_ud)
+            if random.random() < 0.38:
+                target_lr = random.randint(-34, 34)
+                target_ud = random.randint(-22, 16)
+                current_lr = _lerp_int(current_lr, target_lr, 0.24)
+                current_ud = _lerp_int(current_ud, target_ud, 0.22)
                 set_gaze(maestro, current_lr, current_ud)
-            time.sleep(0.20)
+            time.sleep(random.uniform(0.12, 0.18))
             continue
 
         if in_intro_mode:
             r = random.random()
-            if r < 0.62:
-                target_lr = clamp(current_lr + random.randint(-12, 12), -55, 55)
-                target_ud = clamp(current_ud + random.randint(-10, 10), -45, 18)
-                current_lr, current_ud = target_lr, target_ud
+            if r < 0.54:
+                target_lr = clamp(current_lr + random.randint(-14, 14), -62, 62)
+                target_ud = clamp(current_ud + random.randint(-9, 9), -42, 16)
+                current_lr = _lerp_int(current_lr, target_lr, 0.52)
+                current_ud = _lerp_int(current_ud, target_ud, 0.46)
                 set_gaze(maestro, current_lr, current_ud)
-                time.sleep(random.uniform(0.16, 0.36))
-            elif r < 0.84:
-                target_lr = random.randint(-48, 48)
-                target_ud = random.randint(-36, 10)
-                current_lr = int(0.60 * current_lr + 0.40 * target_lr)
-                current_ud = int(0.64 * current_ud + 0.36 * target_ud)
+                time.sleep(random.uniform(0.14, 0.30))
+            elif r < 0.82:
+                target_lr = random.randint(-58, 58)
+                target_ud = random.randint(-34, 12)
+                current_lr = _lerp_int(current_lr, target_lr, 0.36)
+                current_ud = _lerp_int(current_ud, target_ud, 0.32)
                 set_gaze(maestro, current_lr, current_ud)
-                time.sleep(random.uniform(0.28, 0.66))
+                time.sleep(random.uniform(0.24, 0.52))
+            elif r < 0.92:
+                current_lr = _lerp_int(current_lr, 0, 0.18)
+                current_ud = _lerp_int(current_ud, -8, 0.14)
+                set_gaze(maestro, current_lr, current_ud)
+                time.sleep(random.uniform(0.18, 0.36))
             else:
-                time.sleep(random.uniform(0.10, 0.22))
+                time.sleep(random.uniform(0.08, 0.18))
             continue
 
         r = random.random()
-        if r < 0.55:
-            target_lr = clamp(current_lr + random.randint(-18, 18), -80, 80)
-            target_ud = clamp(current_ud + random.randint(-14, 14), -60, 60)
-            current_lr, current_ud = target_lr, target_ud
+        if r < 0.48:
+            target_lr = clamp(current_lr + random.randint(-20, 20), -88, 88)
+            target_ud = clamp(current_ud + random.randint(-14, 14), -58, 52)
+            current_lr = _lerp_int(current_lr, target_lr, 0.56)
+            current_ud = _lerp_int(current_ud, target_ud, 0.52)
             set_gaze(maestro, current_lr, current_ud)
-            time.sleep(random.uniform(0.10, 0.28))
-        elif r < 0.70:
-            target_lr = random.randint(-70, 70)
-            target_ud = random.randint(-50, 50)
-            current_lr = int(0.52 * current_lr + 0.48 * target_lr)
-            current_ud = int(0.52 * current_ud + 0.48 * target_ud)
+            time.sleep(random.uniform(0.10, 0.24))
+        elif r < 0.74:
+            target_lr = random.randint(-76, 76)
+            target_ud = random.randint(-48, 44)
+            current_lr = _lerp_int(current_lr, target_lr, 0.44)
+            current_ud = _lerp_int(current_ud, target_ud, 0.40)
             set_gaze(maestro, current_lr, current_ud)
-            time.sleep(random.uniform(0.24, 0.70))
-        elif r < 0.82:
-            current_lr = int(0.35 * current_lr)
-            current_ud = int(0.35 * current_ud)
+            time.sleep(random.uniform(0.20, 0.54))
+        elif r < 0.90:
+            current_lr = _lerp_int(current_lr, 0, 0.58)
+            current_ud = _lerp_int(current_ud, 0, 0.58)
             set_gaze(maestro, current_lr, current_ud)
-            time.sleep(random.uniform(0.16, 0.45))
+            time.sleep(random.uniform(0.14, 0.32))
         else:
-            time.sleep(random.uniform(0.08, 0.18))
+            time.sleep(random.uniform(0.08, 0.16))
 
 
 def init_maestro():

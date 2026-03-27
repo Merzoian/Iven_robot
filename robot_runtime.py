@@ -80,6 +80,8 @@ class RobotConfig:
     OCR_DOCUMENT_PSM: int
     OCR_TIMEOUT_S: float
     OCR_DOCUMENT_CROP_RATIO: float
+    SPEECH_SELF_CAPTURE_GUARD_S: float
+    FOLLOW_UP_WAIT_S: float
 
 
 @dataclass
@@ -147,6 +149,11 @@ class RobotRuntime:
     head_current_pose: dict = field(default_factory=lambda: {"yaw": 1500, "pitch": 1500, "tilt": 1500})
     latest_transcription: str = ""
     latest_transcription_at: float = 0.0
+    latest_user_transcription: str = ""
+    latest_user_transcription_at: float = 0.0
+    latest_model_transcription: str = ""
+    latest_model_transcription_at: float = 0.0
+    last_user_activity_at: float = 0.0
     session_memory: dict = field(default_factory=lambda: {"name": None, "likes": [], "facts": []})
     memory_lock: threading.Lock = field(default_factory=threading.Lock)
     MIC_CHANNELS: int = 1
@@ -154,6 +161,10 @@ class RobotRuntime:
     maestro: object = None
     latest_camera_frame: object = None
     ocr_available: bool = False
+    mic_resume_at: float = 0.0
+    model_audio_suppressed_until: float = 0.0
+    model_action_suppressed_until: float = 0.0
+    command_idle_prompt_due_at: float = 0.0
 
     def __getattr__(self, name):
         return getattr(self.config, name)

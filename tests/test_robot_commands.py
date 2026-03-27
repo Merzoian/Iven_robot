@@ -1,4 +1,5 @@
 import unittest
+import asyncio
 
 import robot_commands
 
@@ -8,6 +9,7 @@ class DummyRuntime:
         self.command_enabled = True
         self.tracking_enabled = False
         self.control_mode = "command"
+        self.audio_queue = asyncio.Queue()
         self.tracked_lr = 11
         self.tracked_ud = -7
         self.tracked_head_yaw = 33
@@ -32,6 +34,13 @@ class DummyRuntime:
         self.CH_FACE_PITCH = 7
         self.CH_TILT = 9
         self.COMMAND_TRACKING_PAUSE_S = 2.8
+        self.is_ivan_talking = False
+        self.last_user_activity_at = 0.0
+        self.model_audio_suppressed_until = 0.0
+        self.model_action_suppressed_until = 0.0
+        self.command_idle_prompt_due_at = 0.0
+        self.CH_JAW = 6
+        self.JAW_CLOSED = 1500
         self.maestro = None
         self.requested_head_pose = None
         self.centered = False
@@ -178,6 +187,41 @@ class RobotCommandsTests(unittest.TestCase):
         self.assertEqual(self.runtime.gaze_hold_lr, 0)
         self.assertEqual(self.runtime.gaze_hold_ud, 0)
         self.assertTrue(self.runtime.gaze_hold_enabled)
+        self.assertGreater(self.runtime.model_audio_suppressed_until, 0.0)
+        self.assertGreater(self.runtime.command_idle_prompt_due_at, 0.0)
+
+    def test_tilt_head_tool_only_changes_tilt(self):
+        result = robot_commands.execute_robot_function("tilt_head", {"direction": "left", "duration_s": 1.5})
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["direction"], "left")
+        self.assertEqual(self.runtime.head_target_pose["yaw"], 1500)
+        self.assertEqual(self.runtime.head_target_pose["pitch"], 1500)
+        self.assertNotEqual(self.runtime.head_target_pose["tilt"], 1500)
+
+    def test_local_voice_command_tilt_left_uses_tilt_channel(self):
+        handled = robot_commands.execute_local_voice_command("tilt left")
+
+        self.assertTrue(handled)
+        self.assertEqual(self.runtime.head_target_pose["yaw"], 1500)
+        self.assertEqual(self.runtime.head_target_pose["pitch"], 1500)
+        self.assertNotEqual(self.runtime.head_target_pose["tilt"], 1500)
+
+    def test_intro_correct_feedback_triggers_yes_gesture(self):
+        self.runtime.control_mode = "intro"
+
+        handled = robot_commands.execute_local_voice_command("that is correct")
+
+        self.assertTrue(handled)
+        self.assertEqual(self.runtime.gesture_calls, ["yes"])
+
+    def test_intro_wrong_feedback_triggers_no_gesture(self):
+        self.runtime.control_mode = "intro"
+
+        handled = robot_commands.execute_local_voice_command("that is wrong")
+
+        self.assertTrue(handled)
+        self.assertEqual(self.runtime.gesture_calls, ["no"])
 
     def test_local_voice_command_center_invokes_center_servos(self):
         self.runtime.maestro = object()

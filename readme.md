@@ -9,6 +9,7 @@ Valentina, a Senior Computer Engineering student at BYU-Idaho, created this proj
 - Hold a live conversation through Gemini realtime audio.
 - Remember names, likes, and short facts during a session.
 - Move eyes, jaw, and head with servo control.
+- Separate looking left or right from head tilt movement.
 - Track faces and motion automatically.
 - Stay in a quiet nonverbal `intro` mode with yes/no head gestures.
 - Describe what he sees through the camera.
@@ -41,6 +42,8 @@ Use command mode for direct movement requests.
 
 - Ivan accepts manual head and gaze movement commands.
 - Tracking is disabled.
+- After local movement and mode-switch commands, Ivan stays quiet briefly instead of reacting immediately.
+- If no new command arrives for a short time, he asks once what you want next.
 - This is the default conversational mode unless you switch modes.
 
 Say:
@@ -71,6 +74,7 @@ Use intro mode for quiet nonverbal behavior.
 - He keeps his head slightly lowered.
 - He still blinks and performs subtle eye movement.
 - He answers yes or no with head gestures only.
+- Spoken feedback like `yes`, `correct`, `no`, or `wrong` can trigger local yes/no gestures.
 
 Say:
 
@@ -94,6 +98,8 @@ Say:
 - `turn head right`
 - `tilt left`
 - `tilt right`
+- `tilt left side`
+- `tilt right side`
 - `head up`
 - `head down`
 
@@ -132,12 +138,17 @@ Notes:
 - Ivan introduces himself naturally when asked who he is or what he can do.
 - If someone asks about features, he gives a short feature tour first.
 - If someone asks about one feature, he explains it briefly and asks whether they want the best way to use it.
+- In command mode, `look_direction` is only for left, right, up, down, or center.
+- In command mode, tilt is handled separately from looking left and right.
+- After a command-mode movement request, Ivan is instructed to stay quiet and wait for the next command.
+- After command idle time, he can ask `What do you want me to do next?`
 - Ivan knows Valentina created this project and brought him to life for her Advanced Embedded Systems class at BYU-Idaho.
 - Voice output can be changed with `IVAN_VOICE_NAME`.
+- The current default voice is `Kore`.
 
 ## Camera Preview Notes
 
-- The preview shows a recent speech HUD.
+- The preview can show separate `Heard` and `Said` caption lines for recent user and model speech.
 - Face landmark `436` is used as the face marker instead of a full face box.
 - Hand boxes are labeled `hand`.
 - Non-person object boxes can come from the IMX500 path when available.
@@ -159,6 +170,16 @@ He can remember phrases such as:
 - OCR depends on the local `tesseract` binary.
 - The default OCR command comes from `IVAN_OCR_COMMAND` or falls back to `tesseract`.
 - The default OCR language comes from `IVAN_OCR_LANG` or falls back to `eng`.
+
+## Audio And Realtime Behavior
+
+- Mic capture uses a smaller chunk size for lower-latency streaming.
+- Mic upload is held briefly after Ivan speaks to reduce speaker self-capture.
+- Camera upload pacing changes by mode.
+- Tracking mode sends frames faster.
+- Command mode sends frames at a moderate rate.
+- Intro mode sends frames more slowly.
+- Model audio and movement tool calls can be temporarily suppressed after local commands so the robot feels more deterministic.
 
 ## Backup Workflow
 

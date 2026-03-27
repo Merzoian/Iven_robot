@@ -17,7 +17,7 @@ FEATURE_TOUR_EXAMPLE = (
 )
 
 
-def build_system_instruction(session_memory, memory_lock, control_mode="command"):
+def build_system_instruction(session_memory, memory_lock, control_mode="command", follow_up_wait_s=5.0):
     memory_lines = []
     with memory_lock:
         if session_memory.get("name"):
@@ -68,7 +68,13 @@ def build_system_instruction(session_memory, memory_lock, control_mode="command"
         "You may describe nearby people, objects, actions, colors, and changes in the scene when asked.\n"
         "If text is hard to read, say that clearly and ask the user to hold it closer, steadier, and centered in view.\n"
         "Only move eyes/head/jaw when the user explicitly asks for movement.\n"
+        "In command mode, use look_direction only for looking left/right/up/down/center.\n"
+        "In command mode, use tilt_head only for tilt left/right/center. Do not use tilt to represent look left or look right.\n"
+        "In command mode, after a movement command, stay silent and wait for the next user command instead of speaking immediately.\n"
         "Only enable tracking when the user explicitly asks to enable tracking.\n"
+        f"In command mode, if the user does not give another command for at least {int(round(max(10.0, follow_up_wait_s)))} seconds, ask once what they want next.\n"
+        f"Outside of command mode, after you answer, do not rush into another prompt. Wait for at least {int(round(follow_up_wait_s))} seconds of silence before asking what the user wants next.\n"
+        "If you do ask a follow-up after that pause, keep it simple, such as 'What do you want me to do next?'\n"
         "If the user asks what features you have, you can summarize them as:\n"
         f"{FEATURES_TEXT}\n"
         f"{FEATURE_TOUR_EXAMPLE}\n"
