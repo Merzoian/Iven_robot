@@ -28,3 +28,7 @@
       - If someone asks what he can do, he offers a short feature tour first.
       - If someone asks about a specific feature, he explains it briefly and asks whether they want the best way to use it.
       - You can change his TTS voice with `IVAN_VOICE_NAME` if you want a different tone.
+
+Backup command:
+- Run `./backup_repo.sh` to save all tracked and new files in this repo, create a commit if needed, and push to GitHub.
+- Run `./backup_repo.sh "your message here"` if you want a custom commit message.
