@@ -1,4 +1,5 @@
 import re
+import threading
 import time
 
 
@@ -79,6 +80,31 @@ def _intro_feedback_gesture(text):
     return False
 
 
+def _trigger_head_gesture(gesture):
+    gesture_name = str(gesture or "").strip().lower()
+
+    worker = getattr(_ctx, "_gesture_worker", None)
+    if worker is not None and worker.is_alive():
+        return {"ok": False, "error": "Gesture already in progress"}
+
+    if not hasattr(_ctx, "perform_head_gesture"):
+        return {"ok": False, "error": "Gesture handler is not configured"}
+
+    if getattr(_ctx, "maestro", None) is None:
+        return _ctx.perform_head_gesture(gesture_name)
+
+    def _run():
+        try:
+            _ctx.perform_head_gesture(gesture_name)
+        finally:
+            _ctx._gesture_worker = None
+
+    thread = threading.Thread(target=_run, daemon=True)
+    _ctx._gesture_worker = thread
+    thread.start()
+    return {"ok": True, "gesture": gesture_name, "queued": True}
+
+
 def execute_robot_function(name, args):
     args = args or {}
 
@@ -105,6 +131,10 @@ def execute_robot_function(name, args):
     if name == "set_tracking":
         _ctx.tracking_enabled = bool(args.get("enabled", True))
         _ctx.command_enabled = not _ctx.tracking_enabled
+        if _ctx.tracking_enabled:
+            _ctx.control_mode = "tracking"
+        elif getattr(_ctx, "control_mode", "command") == "tracking":
+            _ctx.control_mode = "command"
         if not _ctx.tracking_enabled:
             _ctx.tracked_lr = 0
             _ctx.tracked_ud = 0
@@ -250,7 +280,7 @@ def execute_robot_function(name, args):
     if name == "gesture_head":
         if not _ctx.command_enabled:
             return {"ok": False, "error": "Movement command ignored in tracking mode"}
-        return _ctx.perform_head_gesture(args.get("gesture", "yes"))
+        return _trigger_head_gesture(args.get("gesture", "yes"))
 
     if name == "read_visible_text":
         if not hasattr(_ctx, "read_visible_text"):

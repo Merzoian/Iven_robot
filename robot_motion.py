@@ -534,12 +534,13 @@ def perform_head_gesture(gesture):
             (rest_pose["yaw"], rest_pose["pitch"], tilt, 0.24),
         ]
     else:
-        left_yaw = int(clamp(rest_pose["yaw"] + 132, yaw_min, yaw_max))
-        right_yaw = int(clamp(rest_pose["yaw"] - 132, yaw_min, yaw_max))
+        swing = 168 if getattr(_ctx, "control_mode", "command") == "intro" else 132
+        left_yaw = int(clamp(rest_pose["yaw"] + swing, yaw_min, yaw_max))
+        right_yaw = int(clamp(rest_pose["yaw"] - swing, yaw_min, yaw_max))
         sequence = [
-            (left_yaw, rest_pose["pitch"], tilt, 0.24),
-            (right_yaw, rest_pose["pitch"], tilt, 0.24),
-            (rest_pose["yaw"], rest_pose["pitch"], tilt, 0.26),
+            (left_yaw, rest_pose["pitch"], tilt, 0.28 if swing > 132 else 0.24),
+            (right_yaw, rest_pose["pitch"], tilt, 0.28 if swing > 132 else 0.24),
+            (rest_pose["yaw"], rest_pose["pitch"], tilt, 0.28 if swing > 132 else 0.26),
         ]
 
     for yaw, pitch, tilt_val, hold_s in sequence:

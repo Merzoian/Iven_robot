@@ -11,9 +11,13 @@ import robot_session
 class DummySession:
     def __init__(self):
         self.tool_responses = []
+        self.realtime_inputs = []
 
     async def send_tool_response(self, function_responses):
         self.tool_responses.append(function_responses)
+
+    async def send_realtime_input(self, **kwargs):
+        self.realtime_inputs.append(kwargs)
 
 
 def make_response(transcription_text=None, output_transcription_text=None, audio_chunks=None, function_calls=None):
@@ -190,6 +194,51 @@ class RobotSessionTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(self.runtime.audio_queue.empty())
+
+    async def test_handle_session_response_syncs_mode_after_local_command(self):
+        session = DummySession()
+
+        def local_command(_text):
+            self.runtime.control_mode = "intro"
+            self.runtime.tracking_enabled = False
+
+        await robot_session.handle_session_response(
+            make_response(transcription_text="switch to intro mode"),
+            session,
+            self.runtime,
+            mock.Mock(),
+            local_command,
+            mock.Mock(),
+        )
+
+        self.assertEqual(len(session.realtime_inputs), 1)
+        self.assertIn("intro mode", session.realtime_inputs[0]["text"])
+
+    async def test_handle_session_response_dedupes_repeated_partial_transcripts(self):
+        session = DummySession()
+        apply_memory = mock.Mock()
+        execute_local_voice_command = mock.Mock()
+        response = make_response(transcription_text="look left")
+
+        await robot_session.handle_session_response(
+            response,
+            session,
+            self.runtime,
+            apply_memory,
+            execute_local_voice_command,
+            mock.Mock(),
+        )
+        await robot_session.handle_session_response(
+            response,
+            session,
+            self.runtime,
+            apply_memory,
+            execute_local_voice_command,
+            mock.Mock(),
+        )
+
+        apply_memory.assert_called_once_with("look left")
+        execute_local_voice_command.assert_called_once_with("look left")
 
 
 if __name__ == "__main__":

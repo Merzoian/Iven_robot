@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 import robot_motion
 
@@ -67,6 +68,9 @@ class DummyMotionRuntime:
         self.last_target_velocity_x = 0.0
         self.last_target_velocity_y = 0.0
         self.maestro = None
+        self.head_target_pose = {"yaw": 1500, "pitch": 1500, "tilt": 1500}
+        self.head_override_pose = {"yaw": 1500, "pitch": 1500, "tilt": 1500}
+        self.tracking_resume_at = 0.0
 
 
 class RobotMotionTests(unittest.TestCase):
@@ -142,6 +146,19 @@ class RobotMotionTests(unittest.TestCase):
         self.assertLess(self.runtime.tracked_ud, 80)
         self.assertLess(self.runtime.tracked_head_yaw, 60)
         self.assertLess(self.runtime.tracked_head_pitch, 50)
+
+    def test_intro_no_gesture_moves_left_right_then_center(self):
+        self.runtime.control_mode = "intro"
+        poses = []
+
+        with mock.patch.object(robot_motion, "_apply_override_pose", side_effect=lambda yaw, pitch, tilt, duration: poses.append((yaw, pitch, tilt, duration))), mock.patch.object(robot_motion.time, "sleep", return_value=None):
+            result = robot_motion.perform_head_gesture("no")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(poses), 3)
+        self.assertGreater(poses[0][0], self.runtime.HEAD_NEUTRAL["yaw"])
+        self.assertLess(poses[1][0], self.runtime.HEAD_NEUTRAL["yaw"])
+        self.assertEqual(self.runtime.head_target_pose["yaw"], self.runtime.HEAD_NEUTRAL["yaw"])
 
 
 if __name__ == "__main__":

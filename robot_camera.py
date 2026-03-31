@@ -89,11 +89,11 @@ class CameraManager:
         h, w = model_frame.shape[:2]
         max_w, max_h = _ctx.MODEL_FRAME_MAX_SIZE
         scale = min(max_w / max(1, w), max_h / max(1, h))
-        if scale > 1.02:
+        if scale < 0.98 or scale > 1.02:
             model_frame = _ctx.cv2.resize(
                 model_frame,
                 (int(round(w * scale)), int(round(h * scale))),
-                interpolation=_ctx.cv2.INTER_CUBIC,
+                interpolation=_ctx.cv2.INTER_CUBIC if scale > 1.0 else _ctx.cv2.INTER_AREA,
             )
         return model_frame
 

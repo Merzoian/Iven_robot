@@ -1,193 +1,185 @@
 # Ivan Robot
 
-Ivan is a conversational robotic head with live audio, live camera input, servo-driven motion, OCR, tracking, and short-term memory.
+Ivan is a Python runtime for a conversational robotic head with live Gemini audio, camera awareness, servo motion, OCR, tracking, and short session memory.
 
-Valentina, a Senior Computer Engineering student at BYU-Idaho, created this project and brought Ivan to life for her Advanced Embedded Systems class.
+Valentina, a Senior Computer Engineering student at BYU-Idaho, created the project for her Advanced Embedded Systems class.
 
-## What Ivan Can Do
+## What The Project Does
 
-- Hold a live conversation through Gemini realtime audio.
-- Remember names, likes, and short facts during a session.
-- Move eyes, jaw, and head with servo control.
-- Separate looking left or right from head tilt movement.
-- Track faces and motion automatically.
-- Stay in a quiet nonverbal `intro` mode with yes/no head gestures.
-- Describe what he sees through the camera.
-- Read visible text, handwriting, numbers, and simple math with local OCR.
-- Speak with configurable voice output.
+- Runs a live Gemini session with microphone input, spoken audio output, camera frames, and tool calls.
+- Controls eyes, jaw, head yaw, head pitch, and head tilt through a Pololu Maestro servo controller when hardware is present.
+- Supports three modes: `command`, `tracking`, and `intro`.
+- Uses local OCR to read visible text, handwriting, numbers, and simple math from the latest camera frame.
+- Stores short session memory such as names, likes, and remembered facts.
+- Falls back to deterministic local voice-command handling for movement, mode switching, and OCR triggers.
 
-## Main Entry Point
+## Entry Point
 
-- Run [main4_robot.py](/home/redleader/gemini_robot/main4_robot.py). It simply starts [robot_app.py](/home/redleader/gemini_robot/robot_app.py).
+Run [main4_robot.py](/home/redleader/gemini_robot/main4_robot.py). It imports `run()` from [robot_app.py](/home/redleader/gemini_robot/robot_app.py) and starts the full runtime.
 
-## Core Files
+```bash
+python main4_robot.py
+```
 
-- [robot_app.py](/home/redleader/gemini_robot/robot_app.py): main runtime, Gemini session loop, hardware startup, reconnect behavior.
-- [robot_motion.py](/home/redleader/gemini_robot/robot_motion.py): head and eye movement behavior, tracking motion, blinking, gestures.
-- [robot_camera.py](/home/redleader/gemini_robot/robot_camera.py): Picamera2 capture, frame enhancement, tracking, HUD, preview.
-- [robot_audio.py](/home/redleader/gemini_robot/robot_audio.py): microphone input, speaker playback, jaw lip sync, camera upload pacing.
-- [robot_commands.py](/home/redleader/gemini_robot/robot_commands.py): tool execution and deterministic spoken command parsing.
-- [robot_ocr.py](/home/redleader/gemini_robot/robot_ocr.py): local OCR with Tesseract, document mode, simple math extraction.
-- [robot_prompt.py](/home/redleader/gemini_robot/robot_prompt.py): Ivan’s system instruction and feature wording.
-- [robot_memory.py](/home/redleader/gemini_robot/robot_memory.py): session memory load/save and fact extraction.
-- [robot_tools.py](/home/redleader/gemini_robot/robot_tools.py): tool schema exposed to Gemini.
-- [robot_config.json](/home/redleader/gemini_robot/robot_config.json): runtime tuning overrides.
-- [ivan_servo_calibration.json](/home/redleader/gemini_robot/ivan_servo_calibration.json): servo calibration data.
+## Main Files
 
-## Control Modes
+- [robot_app.py](/home/redleader/gemini_robot/robot_app.py): runtime assembly, Gemini connection loop, shutdown, reconnects, and startup wiring.
+- [robot_runtime.py](/home/redleader/gemini_robot/robot_runtime.py): shared runtime state and JSON config loading.
+- [robot_motion.py](/home/redleader/gemini_robot/robot_motion.py): servo calibration, head hold logic, gaze control, blinking, gestures, and tracking math.
+- [robot_camera.py](/home/redleader/gemini_robot/robot_camera.py): Picamera2 capture, frame enhancement, face/person detection, preview HUD, and JPEG preparation.
+- [robot_audio.py](/home/redleader/gemini_robot/robot_audio.py): microphone capture, speaker playback, jaw lip sync, and camera-send pacing.
+- [robot_commands.py](/home/redleader/gemini_robot/robot_commands.py): Gemini tool execution and local spoken command parsing.
+- [robot_session.py](/home/redleader/gemini_robot/robot_session.py): response handling for transcripts, audio chunks, and tool calls.
+- [robot_ocr.py](/home/redleader/gemini_robot/robot_ocr.py): local Tesseract OCR and visible-math extraction.
+- [robot_prompt.py](/home/redleader/gemini_robot/robot_prompt.py): system instruction text and feature-tour wording.
+- [robot_memory.py](/home/redleader/gemini_robot/robot_memory.py): session memory extraction, load, and save logic.
+- [robot_tools.py](/home/redleader/gemini_robot/robot_tools.py): tool declarations exposed to Gemini.
+- [servo_controller.py](/home/redleader/gemini_robot/servo_controller.py): serial control for the Maestro board.
+
+## Runtime Requirements
+
+The repository does not currently include a pinned dependency file, but the code expects:
+
+- Python 3
+- `google-genai`
+- `pyaudio`
+- `numpy`
+- `opencv-python`
+- `mediapipe`
+- `pyserial`
+- Raspberry Pi `picamera2` support for the live camera path
+- local `tesseract` for OCR
+
+Hardware-specific features are optional at runtime:
+
+- If the Maestro servo controller is unavailable, the app can still run in a reduced software-only state.
+- If Picamera2 or camera dependencies are unavailable, the camera path is disabled.
+- If Tesseract is unavailable, OCR requests return a clear unavailable error.
+
+## Environment Variables
+
+- `GOOGLE_API_KEY`: required for the Gemini live connection.
+- `IVAN_VOICE_NAME`: optional voice name, defaults to `Kore`.
+- `IVAN_LOG_LEVEL`: optional log level, defaults to `INFO`.
+- `IVAN_OCR_COMMAND`: optional OCR binary path, defaults to `tesseract`.
+- `IVAN_OCR_LANG`: optional OCR language, defaults to `eng`.
+
+The live model configured in the code is `gemini-2.5-flash-native-audio-latest`.
+
+## Modes
 
 ### Command Mode
 
-Use command mode for direct movement requests.
+- Default mode for manual movement commands.
+- Manual look, head move, tilt, and center commands are allowed.
+- After a local movement command, Ivan briefly suppresses model speech and model movement reactions.
+- If the user stays idle long enough, Ivan can send a single follow-up prompt asking what to do next.
 
-- Ivan accepts manual head and gaze movement commands.
-- Tracking is disabled.
-- After local movement and mode-switch commands, Ivan stays quiet briefly instead of reacting immediately.
-- If no new command arrives for a short time, he asks once what you want next.
-- This is the default conversational mode unless you switch modes.
-
-Say:
+Common phrases:
 
 - `enable command`
 - `disable tracking`
 - `stop following`
+- `look left`
+- `turn head right`
+- `tilt left`
+- `center`
 
 ### Tracking Mode
 
-Use tracking mode when Ivan should follow what is in front of him.
-
-- Ivan follows targets automatically.
+- Enables automatic following behavior.
 - Manual movement commands are rejected while tracking is active.
-- Tracking priority is hand, then face, then detected objects, then fallback motion or face logic.
+- The camera path prioritizes face tracking, then person tracking, then fallback remembered target behavior.
 
-Say:
+Common phrases:
 
 - `enable tracking`
 - `start tracking`
+- `tracking mode`
 - `follow me`
+- `stop tracking`
 
 ### Intro Mode
 
-Use intro mode for quiet nonverbal behavior.
+- Quiet nonverbal mode.
+- Spoken audio output is suppressed.
+- The head rests slightly downward.
+- Blinking and subtle eye motion continue.
+- `yes` and `no` style feedback can trigger local head gestures.
+- In intro mode, `wrong` or `no` uses a more explicit `left -> right -> center` head gesture.
 
-- Ivan does not speak in intro mode.
-- He keeps his head slightly lowered.
-- He still blinks and performs subtle eye movement.
-- He answers yes or no with head gestures only.
-- Spoken feedback like `yes`, `correct`, `no`, or `wrong` can trigger local yes/no gestures.
-
-Say:
+Common phrases:
 
 - `intro mode`
 - `switch to intro mode`
 - `enable intro`
 
-## Movement Phrases
+## Tool Functions Exposed To Gemini
 
-### Head Direction
+- `set_mode`
+- `set_tracking`
+- `look_direction`
+- `move_head`
+- `tilt_head`
+- `center_servos`
+- `describe_features`
+- `feature_help`
+- `gesture_head`
+- `read_visible_text`
 
-- `look left`
-- `look right`
-- `look up`
-- `look down`
-- `look center`
+These are declared in [robot_tools.py](/home/redleader/gemini_robot/robot_tools.py) and executed by [robot_commands.py](/home/redleader/gemini_robot/robot_commands.py).
 
-### Direct Head Motion
+Mode changes are also synced back into the live Gemini session so the model stays aligned with the current runtime mode without forcing a reconnect.
 
-- `turn head left`
-- `turn head right`
-- `tilt left`
-- `tilt right`
-- `tilt left side`
-- `tilt right side`
-- `head up`
-- `head down`
+## OCR And Vision
 
-### Neutral Position
+- OCR reads from the latest camera frame.
+- `read_visible_text` supports `auto` and `document` modes.
+- Document mode is intended for centered paper, phone screens, worksheets, whiteboards, and handwriting.
+- Scene-description requests such as `what do you see` are handled through the live Gemini vision context.
+- Model camera frames are resized both up and down to stay within the configured max frame size.
 
-- `center`
-- `home`
-- `neutral`
-
-## Vision And OCR Phrases
-
-### Scene Awareness
-
-- `what do you see`
-- `what are you seeing`
-
-### Reading Text
+OCR-related phrases handled locally include:
 
 - `read this`
 - `can you read this`
 - `what does this say`
-
-### Reading Math
-
 - `read this equation`
 - `solve this equation`
 
-Notes:
-
-- OCR works best when the text is centered, steady, and close enough to read.
-- `document` OCR mode is used for paper, phones, whiteboards, worksheets, and handwriting.
-- Simple visible equations can be read and answered directly when they are clear.
-
-## Conversation Behavior
-
-- Ivan introduces himself naturally when asked who he is or what he can do.
-- If someone asks about features, he gives a short feature tour first.
-- If someone asks about one feature, he explains it briefly and asks whether they want the best way to use it.
-- In command mode, `look_direction` is only for left, right, up, down, or center.
-- In command mode, tilt is handled separately from looking left and right.
-- After a command-mode movement request, Ivan is instructed to stay quiet and wait for the next command.
-- After command idle time, he can ask `What do you want me to do next?`
-- Ivan knows Valentina created this project and brought him to life for her Advanced Embedded Systems class at BYU-Idaho.
-- Voice output can be changed with `IVAN_VOICE_NAME`.
-- The current default voice is `Kore`.
-
-## Camera Preview Notes
-
-- The preview can show separate `Heard` and `Said` caption lines for recent user and model speech.
-- Face landmark `436` is used as the face marker instead of a full face box.
-- Hand boxes are labeled `hand`.
-- Non-person object boxes can come from the IMX500 path when available.
-
 ## Memory
 
-Ivan stores short session memory in [ivan_session_memory.json](/home/redleader/gemini_robot/ivan_session_memory.json).
+Session memory is stored in [ivan_session_memory.json](/home/redleader/gemini_robot/ivan_session_memory.json).
 
-He can remember phrases such as:
+The current memory extractor can save:
 
 - `my name is ...`
-- `i am ...`
-- `i like ...`
+- `I'm ...`
+- `I like ...`
 - `remember that ...`
-- `my favorite color is ...`
+- `my favorite ...`
 
-## Local OCR Requirements
+Repeated streaming partial transcripts are deduplicated briefly before local command execution and memory extraction so one spoken request is less likely to trigger duplicate movements or OCR runs.
 
-- OCR depends on the local `tesseract` binary.
-- The default OCR command comes from `IVAN_OCR_COMMAND` or falls back to `tesseract`.
-- The default OCR language comes from `IVAN_OCR_LANG` or falls back to `eng`.
+## Config Files
 
-## Audio And Realtime Behavior
+- [robot_config.json](/home/redleader/gemini_robot/robot_config.json): JSON overrides for runtime tuning, device indexes, tracking gains, OCR settings, frame size, and timing.
+- [ivan_servo_calibration.json](/home/redleader/gemini_robot/ivan_servo_calibration.json): servo pulse calibration.
+- [ivan_session_memory.json](/home/redleader/gemini_robot/ivan_session_memory.json): saved short-term session memory.
 
-- Mic capture uses a smaller chunk size for lower-latency streaming.
-- Mic upload is held briefly after Ivan speaks to reduce speaker self-capture.
-- Camera upload pacing changes by mode.
-- Tracking mode sends frames faster.
-- Command mode sends frames at a moderate rate.
-- Intro mode sends frames more slowly.
-- Model audio and movement tool calls can be temporarily suppressed after local commands so the robot feels more deterministic.
+## Tests
+
+The `tests/` directory currently covers commands, memory, motion, OCR, runtime config loading, and session-response handling.
+
+```bash
+python -m unittest discover -s tests
+```
 
 ## Backup Workflow
 
-Use the repo backup script to save and push changes.
+Use [backup_repo.sh](/home/redleader/gemini_robot/backup_repo.sh) to stage, commit if needed, and push the current branch:
 
 ```bash
 ./backup_repo.sh
 ./backup_repo.sh "your message here"
 ```
-
-It stages changes, creates a commit only when needed, and pushes the current branch to GitHub.

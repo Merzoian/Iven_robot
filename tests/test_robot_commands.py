@@ -138,14 +138,24 @@ class RobotCommandsTests(unittest.TestCase):
     def test_set_tracking_false_resets_tracking_state(self):
         self.runtime.tracking_enabled = True
         self.runtime.command_enabled = False
+        self.runtime.control_mode = "tracking"
 
         result = robot_commands.execute_robot_function("set_tracking", {"enabled": False})
 
         self.assertEqual(result, {"ok": True, "tracking_enabled": False})
         self.assertFalse(self.runtime.tracking_enabled)
         self.assertTrue(self.runtime.command_enabled)
+        self.assertEqual(self.runtime.control_mode, "command")
         self.assertEqual(self.runtime.tracking_resume_at, 0.0)
         self.assertEqual(self.runtime.eye_manual_until, 0.0)
+
+    def test_set_tracking_true_updates_control_mode(self):
+        result = robot_commands.execute_robot_function("set_tracking", {"enabled": True})
+
+        self.assertEqual(result, {"ok": True, "tracking_enabled": True})
+        self.assertTrue(self.runtime.tracking_enabled)
+        self.assertFalse(self.runtime.command_enabled)
+        self.assertEqual(self.runtime.control_mode, "tracking")
 
     def test_look_direction_rejected_in_tracking_mode(self):
         self.runtime.command_enabled = False
