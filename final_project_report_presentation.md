@@ -177,6 +177,7 @@ User Speech + Camera Input
 ```
 
 ### Diagram 2: Software Module Layout
+<img width="1408" height="768" alt="Gemini_Generated_Image_rjr36rjr36rjr36r" src="https://github.com/user-attachments/assets/f26a5f8a-b6af-412d-baa7-0ec5bc458735" />
 
 ```text
 [  main4_robot.py  ]  <-- Entry Point (Bootstrap)
@@ -196,6 +197,7 @@ User Speech + Camera Input
 ```
 
 ### Diagram 3: Operating Modes
+<img width="1408" height="768" alt="Gemini_Generated_Image_wr4k1lwr4k1lwr4k" src="https://github.com/user-attachments/assets/73e8f0b4-6a11-4fad-bce5-f8313e1ddf60" />
 
 ```text
             +----------------+
