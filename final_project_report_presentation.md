@@ -156,8 +156,10 @@ Ivan successfully integrates embedded hardware control with AI-assisted interact
 ### Diagram 1: High-Level System Flow
 
 You can replace this section with a rendered figure in Word or Google Docs.
+<img width="1190" height="880" alt="Gemini_Generated_Image_moyprymoyprymoyp" src="https://github.com/user-attachments/assets/86b98d97-5fa1-400d-89e2-dd9cd900dffe" />
 
 ```text
+
 User Speech + Camera Input
           |
           v
