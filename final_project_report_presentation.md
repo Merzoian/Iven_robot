@@ -178,16 +178,20 @@ User Speech + Camera Input
 ### Diagram 2: Software Module Layout
 
 ```text
-main4_robot.py
-      |
-      v
-robot_app.py
-  |    |     |      |       |       |
-  v    v     v      v       v       v
-audio camera motion commands memory session
-                    |
-                    v
-                 OCR/tools
+[  main4_robot.py  ]  <-- Entry Point (Bootstrap)
+               |
+               v
+       [  robot_app.py  ]  <-- Central Runtime / Orchestrator
+               |
+      _________|___________________________________________
+     |                 |                 |                 |
+ [ HARDWARE I/O ]  [ CORE LOGIC ]    [ AI & DATA ]    [ UTILITIES ]
+     |                 |                 |                 |
+  - robot_audio     - robot_motion    - robot_session   - robot_config
+  - robot_camera    - robot_commands  - robot_memory    - robot_logging
+                       |
+                       v
+                 [ robot_ocr ]
 ```
 
 ### Diagram 3: Operating Modes
